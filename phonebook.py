@@ -1,11 +1,12 @@
-import csv
 import psycopg2
 from connect import get_connection
 
-def insert_contacts(phonebook):
+
+
+def insert_contacts_from_csv(phonebook):
     conn = get_connection()
     if not conn:
-        print("No DB connection")
+        print("DB connection failed")
         return
 
     cursor = conn.cursor()
@@ -14,6 +15,7 @@ def insert_contacts(phonebook):
         cursor.execute("""
             INSERT INTO contacts (first_name, last_name, phone, email)
             VALUES (%s, %s, %s, %s)
+            ON CONFLICT (phone) DO NOTHING
         """, (
             person['first_name'],
             person['last_name'],
@@ -24,35 +26,142 @@ def insert_contacts(phonebook):
     conn.commit()
     cursor.close()
     conn.close()
-
-    print("Data inserted into database successfully!")
-
-def read_phonebook(filename):
-    phonebook = []
-    with open(filename, mode='r', newline='', encoding='utf-8') as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            clean_row = {key.strip(): value for key, value in row.items()}
-            phonebook.append(clean_row)
-    return phonebook
+    print("CSV data inserted successfully")
 
 
-def display_phonebook(phonebook):
-    for person in phonebook:
-        print(f"Name: {person['first_name']} {person['last_name']}, Phone: {person['phone']}, Email: {person['email']}")
+def add_contact():
+    conn = get_connection()
+    cursor = conn.cursor()
 
+    first_name = input("First name: ")
+    last_name = input("Last name: ")
+    phone = input("Phone: ")
+    email = input("Email: ")
 
-filename = "contacts.csv"
-data = read_phonebook(filename)
+    cursor.execute("""
+        INSERT INTO contacts (first_name, last_name, phone, email)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (phone) DO NOTHING
+    """, (first_name, last_name, phone, email))
 
-display_phonebook(data)
-
-insert_contacts(data)
-
-conn = get_connection()
-
-if conn:
-    print("Connected successfully!")
+    conn.commit()
+    cursor.close()
     conn.close()
-else:
-    print("Connection failed")
+
+    print("Contact added")
+
+
+def view_contacts():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM contacts")
+    rows = cursor.fetchall()
+
+    for row in rows:
+        print(row)
+
+    cursor.close()
+    conn.close()
+
+
+def search_contact():
+    keyword = input("Enter name or phone prefix: ")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT * FROM contacts
+        WHERE first_name ILIKE %s OR phone LIKE %s
+    """, (f"%{keyword}%", f"{keyword}%"))
+
+    rows = cursor.fetchall()
+
+    for row in rows:
+        print(row)
+
+    cursor.close()
+    conn.close()
+
+
+def update_contact():
+    phone = input("Enter phone of contact to update: ")
+    new_name = input("New first name (leave empty to skip): ")
+    new_phone = input("New phone (leave empty to skip): ")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    if new_name:
+        cursor.execute("""
+            UPDATE contacts
+            SET first_name = %s
+            WHERE phone = %s
+        """, (new_name, phone))
+
+    if new_phone:
+        cursor.execute("""
+            UPDATE contacts
+            SET phone = %s
+            WHERE phone = %s
+        """, (new_phone, phone))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    print("Contact updated")
+
+
+
+def delete_contact():
+    phone = input("Enter phone to delete: ")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        DELETE FROM contacts
+        WHERE phone = %s
+    """, (phone,))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    print("Contact deleted")
+
+
+
+def menu():
+    while True:
+        print("\n--- PHONEBOOK MENU ---")
+        print("1. Add contact")
+        print("2. View contacts")
+        print("3. Search contact")
+        print("4. Update contact")
+        print("5. Delete contact")
+        print("6. Exit")
+
+        choice = input("Choose an option: ")
+
+        if choice == "1":
+            add_contact()
+        elif choice == "2":
+            view_contacts()
+        elif choice == "3":
+            search_contact()
+        elif choice == "4":
+            update_contact()
+        elif choice == "5":
+            delete_contact()
+        elif choice == "6":
+            print("Goodbye")
+            break
+        else:
+            print("Invalid choice")
+
+
+if __name__ == "__main__":
+    menu()
